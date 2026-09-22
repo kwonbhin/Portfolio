@@ -644,6 +644,137 @@
         animation: none;
       }
     }
+
+    /* ---- 과제8: 나만의 자리(패스키로 잠긴 비공개 영역) ---- */
+    .lock-badge {
+      display: inline-block;
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      color: #002060;
+      background: #eef1fa;
+      border-radius: 999px;
+      padding: 4px 10px;
+      margin-left: 10px;
+      vertical-align: middle;
+    }
+
+    .auth-status {
+      color: #5b5d68;
+      font-size: 0.9rem;
+      margin: 8px 0 20px;
+    }
+
+    .auth-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .auth-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid #d8d9e0;
+      background: #fff;
+      color: #111;
+      font: inherit;
+      font-weight: 600;
+      font-size: 0.92rem;
+      padding: 12px 18px;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.15s ease, border-color 0.15s ease;
+    }
+
+    .btn:hover {
+      background: #f5f6fa;
+    }
+
+    .btn-primary {
+      background: #002060;
+      border-color: #002060;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #001845;
+    }
+
+    .btn-ghost {
+      border-color: transparent;
+      background: transparent;
+      color: #5b5d68;
+    }
+
+    .btn-sm {
+      padding: 6px 12px;
+      font-size: 0.8rem;
+    }
+
+    .auth-error {
+      color: #b3261e;
+      font-size: 0.88rem;
+      background: #fdecea;
+      border-radius: 8px;
+      padding: 10px 14px;
+    }
+
+    .account-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 14px 18px;
+      background: #f5f6fa;
+      border-radius: 10px;
+      font-weight: 600;
+    }
+
+    .private-items h3,
+    .passkey-manager h3 {
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #5b5d68;
+      margin-bottom: 10px;
+    }
+
+    #private-list,
+    #passkey-list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    #private-list li {
+      padding: 12px 16px;
+      background: #f9f9fb;
+      border: 1px solid #ececf0;
+      border-radius: 8px;
+      color: #333;
+      font-size: 0.95rem;
+    }
+
+    #passkey-list li {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 14px;
+      background: #fff;
+      border: 1px solid #ececf0;
+      border-radius: 8px;
+      font-size: 0.88rem;
+      color: #333;
+    }
   </style>
 </head>
 
@@ -825,6 +956,42 @@
               <span class="lock-label">주소</span>
             </li>
           </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 과제8: 나만의 자리 (패스키로 잠긴 비공개 영역) -->
+  <section id="private" class="snap-section" aria-labelledby="private-heading">
+    <div class="section-inner">
+      <h2 id="private-heading">나만의 자리 <span class="lock-badge">패스키로 잠김</span></h2>
+      <p id="auth-status" class="auth-status">확인하는 중…</p>
+
+      <div id="auth-logged-out" class="auth-panel" hidden>
+        <p>비밀번호 없이, 내 기기의 패스키로만 들어갈 수 있는 자리입니다.</p>
+        <div class="auth-actions">
+          <button id="btn-login" class="btn btn-primary" type="button">패스키로 들어가기</button>
+          <button id="btn-register" class="btn" type="button">새 계정 만들고 패스키 등록</button>
+        </div>
+        <p id="auth-error" class="auth-error" hidden></p>
+      </div>
+
+      <div id="auth-logged-in" class="auth-panel" hidden>
+        <div class="account-row">
+          <span id="account-label"></span>
+          <button id="btn-logout" class="btn btn-ghost" type="button">로그아웃</button>
+        </div>
+        <p id="auth-error-in" class="auth-error" hidden></p>
+
+        <div class="private-items">
+          <h3>비공개 메모</h3>
+          <ul id="private-list"></ul>
+        </div>
+
+        <div class="passkey-manager">
+          <h3>등록된 패스키</h3>
+          <ul id="passkey-list"></ul>
+          <button id="btn-add-passkey" class="btn" type="button">이 계정에 패스키 추가 등록</button>
         </div>
       </div>
     </div>
@@ -1057,6 +1224,194 @@
         if (target) slowScrollTo(target, 1400);
       });
     });
+  </script>
+
+  <!-- 과제8: 패스키 인증 -->
+  <script type="module">
+    import { startRegistration, startAuthentication } from "https://cdn.jsdelivr.net/npm/@simplewebauthn/browser@13/+esm";
+
+    // TODO: Supabase 프로젝트를 만든 뒤, 아래 주소를 본인 프로젝트의 Edge Function 주소로 바꾸세요.
+    // 형태: https://<프로젝트 참조 ID>.supabase.co/functions/v1/auth
+    const API_BASE = "https://YOUR-PROJECT-REF.supabase.co/functions/v1/auth";
+
+    const TOKEN_KEY = "pf_session_token";
+    const ACCOUNT_KEY = "pf_account";
+
+    const getToken = () => localStorage.getItem(TOKEN_KEY);
+    const setSession = (token, account) => {
+      localStorage.setItem(TOKEN_KEY, token);
+      localStorage.setItem(ACCOUNT_KEY, JSON.stringify(account));
+    };
+    const clearSession = () => {
+      localStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(ACCOUNT_KEY);
+    };
+
+    const els = {
+      status: document.getElementById("auth-status"),
+      loggedOut: document.getElementById("auth-logged-out"),
+      loggedIn: document.getElementById("auth-logged-in"),
+      errorOut: document.getElementById("auth-error"),
+      errorIn: document.getElementById("auth-error-in"),
+      accountLabel: document.getElementById("account-label"),
+      privateList: document.getElementById("private-list"),
+      passkeyList: document.getElementById("passkey-list"),
+    };
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+      }[c]));
+    }
+
+    function showError(msg, loggedIn) {
+      const el = loggedIn ? els.errorIn : els.errorOut;
+      el.textContent = msg;
+      el.hidden = false;
+    }
+    function clearErrors() {
+      els.errorOut.hidden = true;
+      els.errorIn.hidden = true;
+    }
+
+    async function api(path, options = {}) {
+      const token = getToken();
+      const headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+      let body = null;
+      try { body = await res.json(); } catch (_) {}
+      if (!res.ok) {
+        const e = new Error((body && body.error) || `요청 실패 (${res.status})`);
+        e.status = res.status;
+        throw e;
+      }
+      return body;
+    }
+
+    async function refreshAuthUI() {
+      clearErrors();
+      const token = getToken();
+      if (!token) {
+        els.loggedOut.hidden = false;
+        els.loggedIn.hidden = true;
+        els.status.textContent = "잠겨 있습니다. 패스키로만 들어갈 수 있습니다.";
+        return;
+      }
+      try {
+        const [items, passkeys] = await Promise.all([api("/private-data"), api("/passkeys")]);
+        const account = JSON.parse(localStorage.getItem(ACCOUNT_KEY) || "{}");
+        els.accountLabel.textContent = `${account.label || "내 계정"} 으로 로그인됨`;
+        els.privateList.innerHTML = items
+          .map((i) => `<li>${escapeHtml(i.content)}</li>`)
+          .join("");
+        els.passkeyList.innerHTML = passkeys
+          .map(
+            (p) => `<li>
+              <span>${escapeHtml(p.device_name)} · 등록일 ${new Date(p.created_at).toLocaleDateString()}</span>
+              <button class="btn btn-ghost btn-sm" type="button" data-delete-passkey="${p.id}">삭제</button>
+            </li>`
+          )
+          .join("");
+        els.loggedOut.hidden = true;
+        els.loggedIn.hidden = false;
+        els.status.textContent = "";
+      } catch (e) {
+        if (e.status === 401) {
+          clearSession();
+          els.loggedOut.hidden = false;
+          els.loggedIn.hidden = true;
+          els.status.textContent = "잠겨 있습니다. 패스키로만 들어갈 수 있습니다.";
+        } else {
+          showError(e.message, true);
+        }
+      }
+    }
+
+    document.getElementById("btn-register").addEventListener("click", async () => {
+      clearErrors();
+      const label = prompt("계정 이름을 입력하세요 (예: 권빈, 테스트B)");
+      if (!label) return;
+      const deviceName = prompt("이 패스키를 저장할 기기 이름을 입력하세요 (예: 내 맥북)") || "기기";
+      try {
+        const { options, challengeId } = await api("/register/options", {
+          method: "POST",
+          body: JSON.stringify({ mode: "new", accountLabel: label }),
+        });
+        const attResp = await startRegistration({ optionsJSON: options });
+        const { token, account } = await api("/register/verify", {
+          method: "POST",
+          body: JSON.stringify({ challengeId, response: attResp, deviceName }),
+        });
+        setSession(token, account);
+        await refreshAuthUI();
+      } catch (e) {
+        showError(e.message || "등록이 취소되었거나 실패했습니다.", false);
+      }
+    });
+
+    document.getElementById("btn-login").addEventListener("click", async () => {
+      clearErrors();
+      try {
+        const { options, challengeId } = await api("/login/options", {
+          method: "POST",
+          body: JSON.stringify({}),
+        });
+        const authResp = await startAuthentication({ optionsJSON: options });
+        const { token, account } = await api("/login/verify", {
+          method: "POST",
+          body: JSON.stringify({ challengeId, response: authResp }),
+        });
+        setSession(token, account);
+        await refreshAuthUI();
+      } catch (e) {
+        showError(e.message || "로그인이 취소되었거나 실패했습니다.", false);
+      }
+    });
+
+    document.getElementById("btn-add-passkey").addEventListener("click", async () => {
+      clearErrors();
+      const deviceName = prompt("새 패스키를 저장할 기기 이름을 입력하세요") || "기기";
+      try {
+        const { options, challengeId } = await api("/register/options", {
+          method: "POST",
+          body: JSON.stringify({ mode: "add" }),
+        });
+        const attResp = await startRegistration({ optionsJSON: options });
+        await api("/register/verify", {
+          method: "POST",
+          body: JSON.stringify({ challengeId, response: attResp, deviceName }),
+        });
+        await refreshAuthUI();
+      } catch (e) {
+        showError(e.message || "등록이 취소되었거나 실패했습니다.", true);
+      }
+    });
+
+    document.getElementById("btn-logout").addEventListener("click", async () => {
+      try { await api("/logout", { method: "POST" }); } catch (_) {}
+      clearSession();
+      await refreshAuthUI();
+    });
+
+    els.passkeyList.addEventListener("click", async (e) => {
+      const btn = e.target.closest("[data-delete-passkey]");
+      if (!btn) return;
+      const id = btn.getAttribute("data-delete-passkey");
+      const remaining = els.passkeyList.querySelectorAll("[data-delete-passkey]").length;
+      const msg = remaining <= 1
+        ? "마지막 패스키입니다. 삭제하면 이 계정에는 더 이상 로그인할 수 없습니다. 계속할까요?"
+        : "이 패스키를 삭제할까요?";
+      if (!confirm(msg)) return;
+      try {
+        await api(`/passkeys/${encodeURIComponent(id)}`, { method: "DELETE" });
+        await refreshAuthUI();
+      } catch (e2) {
+        showError(e2.message, true);
+      }
+    });
+
+    refreshAuthUI();
   </script>
 </body>
 </html>
