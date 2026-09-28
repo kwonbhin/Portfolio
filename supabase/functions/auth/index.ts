@@ -121,10 +121,19 @@ Deno.serve(async (req) => {
         userDisplayName: accountLabel,
         attestationType: "none",
         excludeCredentials,
-        authenticatorSelection: {
-          residentKey: "required",
-          userVerification: "preferred",
-        },
+        authenticatorSelection:
+          mode === "add"
+            ? {
+                // 추가 등록일 때는 이미 있는 기기(이 브라우저의 Touch ID)와 안 겹치도록
+                // 처음부터 "다른 기기(QR)"나 보안 키 쪽으로 곧장 유도한다.
+                residentKey: "required",
+                userVerification: "preferred",
+                authenticatorAttachment: "cross-platform",
+              }
+            : {
+                residentKey: "required",
+                userVerification: "preferred",
+              },
       });
 
       const { data: row, error } = await supabase
@@ -138,7 +147,10 @@ Deno.serve(async (req) => {
         })
         .select("id")
         .single();
-      if (error) return fail(500, "챌린지 저장에 실패했습니다.");
+      if (error) {
+        console.error("register/options challenges insert error:", JSON.stringify(error));
+        return fail(500, `챌린지 저장에 실패했습니다: ${error.message}`);
+      }
 
       return json({ options, challengeId: row.id });
     }
@@ -246,7 +258,10 @@ Deno.serve(async (req) => {
         })
         .select("id")
         .single();
-      if (error) return fail(500, "챌린지 저장에 실패했습니다.");
+      if (error) {
+        console.error("login/options challenges insert error:", JSON.stringify(error));
+        return fail(500, `챌린지 저장에 실패했습니다: ${error.message}`);
+      }
 
       return json({ options, challengeId: row.id });
     }
@@ -329,6 +344,30 @@ Deno.serve(async (req) => {
         .from("private_items")
         .select("id, content, created_at")
         .eq("account_id", accountId)
+        .order("created_at", { ascending: true });
+      if (error) return fail(500, "조회에 실패했습니다.");
+      return json(data);
+    }
+
+    // ---------- 특정 계정의 비공개 자료 (본인 것만 허용) ----------
+    if (
+      req.method === "GET" &&
+      path.startsWith("/accounts/") &&
+      path.endsWith("/private-data")
+    ) {
+      const sessionAccountId = await getSessionAccountId(req);
+      if (!sessionAccountId) return fail(401, "로그인이 필요합니다.");
+      const targetId = decodeURIComponent(
+        path.slice("/accounts/".length, -"/private-data".length),
+      );
+      // 요청한 계정 ID가 세션 토큰의 주인과 다르면 자료를 조회하기 전에 거절한다.
+      if (targetId !== sessionAccountId) {
+        return fail(403, "다른 계정의 자료는 볼 수 없습니다.");
+      }
+      const { data, error } = await supabase
+        .from("private_items")
+        .select("id, content, created_at")
+        .eq("account_id", sessionAccountId)
         .order("created_at", { ascending: true });
       if (error) return fail(500, "조회에 실패했습니다.");
       return json(data);
